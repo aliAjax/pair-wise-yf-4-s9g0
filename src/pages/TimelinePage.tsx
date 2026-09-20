@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Search, Route, X, Trash2, Clock, MapPin } from 'lucide-react'
+import {
+  Search,
+  Route,
+  X,
+  Trash2,
+  Clock,
+  MapPin,
+  Archive,
+  ArchiveRestore,
+  Inbox,
+} from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
 import {
   formatTimestamp,
@@ -11,14 +21,30 @@ import {
 import type { WindowScene } from '@/types'
 
 export default function TimelinePage() {
-  const { routeNames, selectedRoute, currentRouteScenes, selectRoute, loadAll, deleteScene } =
-    useSceneStore()
+  const {
+    routeNames,
+    selectedRoute,
+    currentRouteScenes,
+    stagedScenes,
+    selectRoute,
+    loadAll,
+    deleteScene,
+    stageScene,
+    restoreScene,
+  } = useSceneStore()
   const [search, setSearch] = useState('')
   const [detailScene, setDetailScene] = useState<WindowScene | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
   }, [loadAll])
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 2500)
+    return () => clearTimeout(timer)
+  }, [toast])
 
   const filteredRoutes = routeNames.filter((r) =>
     r.toLowerCase().includes(search.toLowerCase())
@@ -33,8 +59,39 @@ export default function TimelinePage() {
     setDetailScene(null)
   }
 
+  const handleStage = (id: string) => {
+    const outcome = stageScene(id)
+    if (outcome.status === 'staged') {
+      setToast(
+        outcome.evicted ? '已移入恢复区，最早暂存的一条已移出' : '已移入恢复区'
+      )
+      setDetailScene(null)
+    } else if (outcome.status === 'duplicate') {
+      setToast('该记录已在恢复区中')
+    } else {
+      setToast('记录不存在，暂存失败')
+    }
+  }
+
+  const handleRestore = (id: string) => {
+    const result = restoreScene(id)
+    if (result === 'restored') {
+      setToast('已恢复回时间线')
+    } else if (result === 'conflict') {
+      setToast('时间线中已存在同编号记录，恢复被拒绝')
+    } else {
+      setToast('恢复区中找不到该记录')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-teal-950 font-serif text-mist-100">
+      {toast && (
+        <div className="fixed left-1/2 top-6 z-[60] -translate-x-1/2 animate-slide-down rounded-full border border-dusk-400/40 bg-teal-900/95 px-5 py-2.5 text-sm text-mist-100 shadow-lg shadow-black/30 backdrop-blur-sm">
+          {toast}
+        </div>
+      )}
+
       <div className="mx-auto max-w-3xl px-4 py-8">
         <h1 className="mb-6 text-3xl font-bold tracking-wide text-dusk-400">
           窗景时间线
@@ -78,6 +135,59 @@ export default function TimelinePage() {
             ))}
           </div>
         </div>
+
+        {stagedScenes.length > 0 && (
+          <section className="mb-8 rounded-xl border border-dusk-400/25 bg-dusk-400/5 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-dusk-300">
+                <Inbox className="w-4 h-4" />
+                恢复区
+              </h2>
+              <span className="text-xs text-mist-500">
+                {stagedScenes.length}/10
+              </span>
+            </div>
+            <ul className="space-y-2">
+              {stagedScenes.map((scene) => (
+                <li
+                  key={scene.id}
+                  className="flex items-center gap-3 rounded-lg border border-teal-800/70 bg-teal-900/40 px-3 py-2"
+                >
+                  <div className="w-28 shrink-0">
+                    <p className="text-xs text-dusk-400">
+                      {formatTimestamp(scene.timestamp)}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-mist-500">
+                      {getTimeOfDay(scene.timestamp)}
+                    </p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1 text-xs text-mist-300">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{scene.routeName}</span>
+                    </p>
+                    {scene.note ? (
+                      <p className="mt-0.5 truncate text-xs text-mist-400">
+                        {scene.note}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 truncate text-xs text-mist-500">
+                        {scene.segment}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRestore(scene.id)}
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-dusk-400/40 px-2.5 py-1.5 text-xs text-dusk-300 transition-colors hover:bg-dusk-400/15"
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    恢复
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-mist-400">
@@ -191,13 +301,22 @@ export default function TimelinePage() {
               )}
             </div>
 
-            <button
-              onClick={() => handleDelete(detailScene.id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
-            >
-              <Trash2 className="w-4 h-4" />
-              删除此窗景
-            </button>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => handleStage(detailScene.id)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-dusk-400/40 py-2.5 text-sm text-dusk-300 transition-colors hover:bg-dusk-400/15"
+              >
+                <Archive className="w-4 h-4" />
+                暂存
+              </button>
+              <button
+                onClick={() => handleDelete(detailScene.id)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
+              >
+                <Trash2 className="w-4 h-4" />
+                删除此窗景
+              </button>
+            </div>
           </div>
         </div>
       )}
