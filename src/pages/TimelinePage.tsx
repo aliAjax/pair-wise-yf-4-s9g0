@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Route, X, Trash2, Clock, MapPin } from 'lucide-react'
+import { Search, Route, X, Trash2, Clock, MapPin, Archive, ArchiveRestore } from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
 import {
   formatTimestamp,
@@ -11,10 +11,20 @@ import {
 import type { WindowScene } from '@/types'
 
 export default function TimelinePage() {
-  const { routeNames, selectedRoute, currentRouteScenes, selectRoute, loadAll, deleteScene } =
-    useSceneStore()
+  const {
+    routeNames,
+    selectedRoute,
+    currentRouteScenes,
+    stagedScenes,
+    selectRoute,
+    loadAll,
+    deleteScene,
+    stageScene,
+    restoreScene,
+  } = useSceneStore()
   const [search, setSearch] = useState('')
   const [detailScene, setDetailScene] = useState<WindowScene | null>(null)
+  const [restoreError, setRestoreError] = useState('')
 
   useEffect(() => {
     loadAll()
@@ -31,6 +41,17 @@ export default function TimelinePage() {
   const handleDelete = (id: string) => {
     deleteScene(id)
     setDetailScene(null)
+  }
+
+  const handleStage = (id: string) => {
+    stageScene(id)
+    setDetailScene(null)
+    setRestoreError('')
+  }
+
+  const handleRestore = (id: string) => {
+    const ok = restoreScene(id)
+    setRestoreError(ok ? '' : '时间线中已存在相同编号的记录，本次恢复被拒绝')
   }
 
   return (
@@ -78,6 +99,49 @@ export default function TimelinePage() {
             ))}
           </div>
         </div>
+
+        {stagedScenes.length > 0 && (
+          <section className="mb-6 rounded-xl border border-teal-800 bg-teal-900/40 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-dusk-400">
+                <Archive className="w-4 h-4" />
+                恢复区
+              </h2>
+              <span className="text-xs text-mist-500">{stagedScenes.length}/10</span>
+            </div>
+            {restoreError && (
+              <p className="mb-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-300">
+                {restoreError}
+              </p>
+            )}
+            <ul className="space-y-2">
+              {[...stagedScenes].reverse().map((scene) => (
+                <li
+                  key={scene.id}
+                  className="flex items-center gap-3 rounded-lg bg-teal-900/60 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium text-mist-200">{scene.routeName}</span>
+                      <span className="text-teal-700">·</span>
+                      <span className="text-mist-400">{formatTimestamp(scene.timestamp)}</span>
+                    </div>
+                    {scene.note && (
+                      <p className="mt-0.5 truncate text-xs text-mist-500">{scene.note}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRestore(scene.id)}
+                    className="flex shrink-0 items-center gap-1 rounded-lg bg-dusk-400/15 px-2.5 py-1.5 text-xs text-dusk-300 transition-colors hover:bg-dusk-400/25"
+                  >
+                    <ArchiveRestore className="w-3.5 h-3.5" />
+                    恢复
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-mist-400">
@@ -191,13 +255,22 @@ export default function TimelinePage() {
               )}
             </div>
 
-            <button
-              onClick={() => handleDelete(detailScene.id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
-            >
-              <Trash2 className="w-4 h-4" />
-              删除此窗景
-            </button>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => handleStage(detailScene.id)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-800/60 py-2.5 text-sm text-mist-200 transition-colors hover:bg-teal-800"
+              >
+                <Archive className="w-4 h-4" />
+                暂存此窗景
+              </button>
+              <button
+                onClick={() => handleDelete(detailScene.id)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
+              >
+                <Trash2 className="w-4 h-4" />
+                删除此窗景
+              </button>
+            </div>
           </div>
         </div>
       )}

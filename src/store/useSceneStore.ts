@@ -7,6 +7,9 @@ import {
   getScenesByRoute,
   getAllRouteNames,
   getRandomScene,
+  getStagedScenes,
+  stageScene as storageStageScene,
+  restoreScene as storageRestoreScene,
 } from '@/services/storage'
 
 interface SceneState {
@@ -15,12 +18,15 @@ interface SceneState {
   currentRouteScenes: WindowScene[]
   selectedRoute: string
   randomScene: WindowScene | null
+  stagedScenes: WindowScene[]
 
   loadAll: () => void
   saveScene: (data: SceneFormData) => void
   deleteScene: (id: string) => void
   selectRoute: (routeName: string) => void
   refreshRandom: () => void
+  stageScene: (id: string) => void
+  restoreScene: (id: string) => boolean
 }
 
 export const useSceneStore = create<SceneState>((set) => ({
@@ -29,11 +35,13 @@ export const useSceneStore = create<SceneState>((set) => ({
   currentRouteScenes: [],
   selectedRoute: '',
   randomScene: null,
+  stagedScenes: [],
 
   loadAll: () => {
     const scenes = getAllScenes()
     const routeNames = getAllRouteNames()
-    set({ scenes, routeNames })
+    const stagedScenes = getStagedScenes()
+    set({ scenes, routeNames, stagedScenes })
   },
 
   saveScene: (data: SceneFormData) => {
@@ -71,5 +79,31 @@ export const useSceneStore = create<SceneState>((set) => ({
   refreshRandom: () => {
     const randomScene = getRandomScene()
     set({ randomScene })
+  },
+
+  stageScene: (id: string) => {
+    storageStageScene(id)
+    const scenes = getAllScenes()
+    const routeNames = getAllRouteNames()
+    const stagedScenes = getStagedScenes()
+    set((state) => {
+      const currentRouteScenes =
+        state.selectedRoute ? getScenesByRoute(state.selectedRoute) : []
+      return { scenes, routeNames, currentRouteScenes, stagedScenes }
+    })
+  },
+
+  restoreScene: (id: string) => {
+    const ok = storageRestoreScene(id)
+    if (!ok) return false
+    const scenes = getAllScenes()
+    const routeNames = getAllRouteNames()
+    const stagedScenes = getStagedScenes()
+    set((state) => {
+      const currentRouteScenes =
+        state.selectedRoute ? getScenesByRoute(state.selectedRoute) : []
+      return { scenes, routeNames, currentRouteScenes, stagedScenes }
+    })
+    return true
   },
 }))
